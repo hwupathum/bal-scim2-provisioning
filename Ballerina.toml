@@ -1,0 +1,8 @@
+[package]
+org = "udarapathum"
+name = "bal_scim_provisioning"
+version = "0.1.0"
+distribution = "2201.9.0"
+
+[build-options]
+observabilityIncluded = true
