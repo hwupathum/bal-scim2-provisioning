@@ -16,6 +16,7 @@ service /scim2 on new http:Listener(9090) {
 
         json jsonPayload = check request.getJsonPayload();
         scim:UserResource userResource = check jsonPayload.cloneWithType(scim:UserResource);
+        string[] emails = userResource?.emails ?: [];
 
         contact:ConnectionConfig connectionConfig = {
             auth: {
@@ -25,10 +26,10 @@ service /scim2 on new http:Listener(9090) {
         contact:Client baseClient = check new contact:Client(connectionConfig);
         contact:SimplePublicObjectInput contact = {
             properties : {
-                "email": userResource?.emails.first(),
+                "email": emails.pop(),
                 "firstname": userResource.name?.givenName,
                 "lastname": userResource.name?.familyName,
-                "lifecyclestage": "Subscriber"
+                "lifecyclestage": "subscriber"
             }      
         };
 
