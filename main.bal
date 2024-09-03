@@ -1,21 +1,47 @@
 import ballerina/http;
 import ballerina/io;
-import ballerinax/scim;
 import ballerinax/hubspot.crm.contact;
+import ballerinax/scim;
+import ballerina/lang.array;
+import ballerina/regex;
 
 configurable string HUBSPOT_API_KEY = "HUBSPOT_API_KEY";
+configurable string USERNAME = "admin";
+configurable string PASSWORD = "admin";
+
+function checkAuth(string authHeader) returns error? {
+
+    if authHeader.startsWith("Basic ") {
+        string encodedCredentials = authHeader.substring(6);
+        string decodedCredentials = check string:fromBytes(check array:fromBase64(encodedCredentials));
+        string[] credentials = regex:split(decodedCredentials,":");
+
+        if credentials.length() == 2 {
+            string username = credentials[0];
+            string password = credentials[1];
+
+            // Check username and password
+            if (USERNAME == username && PASSWORD == password) {
+                return;
+            } else {
+                return error("Invalid credentials");
+            }
+        } else {
+            return error("Invalid credentials format.");
+        }
+    } else {
+        return error("Authorization header must be Basic.");
+    }
+}
 
 service /scim2 on new http:Listener(9090) {
-    resource function post Users(http:Caller caller, http:Request request) returns error? {
+    resource function post Users(@http:Payload scim:UserResource userResource, @http:Header string authorization) returns http:Created|error {
 
-        // Retrieve the Authorization header
-        // string|error authHeader = request.getHeader("Authorization");
-        // if authHeader is string {
-        //     io:println("Authorization Header: " + authHeader);
-        // }
+        error|null authError = check checkAuth(authorization);
+        if (authError is error) {
+            return authError;
+        }
 
-        json jsonPayload = check request.getJsonPayload();
-        scim:UserResource userResource = check jsonPayload.cloneWithType(scim:UserResource);
         string[] emails = userResource?.emails ?: [];
 
         contact:ConnectionConfig connectionConfig = {
@@ -23,30 +49,24 @@ service /scim2 on new http:Listener(9090) {
                 token: HUBSPOT_API_KEY
             }
         };
-        contact:Client baseClient = check new contact:Client(connectionConfig);
         contact:SimplePublicObjectInput contact = {
-            properties : {
+            properties: {
                 "email": emails.pop(),
                 "firstname": userResource.name?.givenName,
                 "lastname": userResource.name?.familyName,
                 "lifecyclestage": "subscriber"
-            }      
+            }
         };
+        contact:Client baseClient = check new contact:Client(connectionConfig);
 
         contact:SimplePublicObject|error bEvent = baseClient->create(contact);
 
-        // Send a response back
-        http:Response res = new;
         if (bEvent is contact:SimplePublicObject) {
-            res.statusCode = 200;
             io:println("Created the contact" + bEvent.toString());
-            res.setPayload("Created the contact" + bEvent.toString());
+            return http:CREATED;
         } else {
-            res.statusCode = 400;
-            io:println(bEvent.stackTrace());
             io:println(bEvent.message());
-            res.setPayload(bEvent.message());
+            return error(bEvent.message());
         }
-        check caller->respond(res);
     }
 }
