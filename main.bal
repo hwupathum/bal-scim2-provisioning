@@ -166,4 +166,35 @@ service /scim2 on new http:Listener(9090) {
         return check caller->respond(response);
     }
 
+    resource function put Users/[string contactId](http:Request request, @http:Header string authorization, http:Caller caller) returns error? {
+
+        do {
+	        _ = check checkAuth(authorization);
+        } on fail var e {
+        	http:Response response = new;
+            response.statusCode = http:STATUS_UNAUTHORIZED;
+            response.setJsonPayload({"message": e.message()});
+            return check caller->respond(response);
+        }
+
+        // Note: This is only a dummy method that does not call hubspot API.
+
+        scim:UserResource userResource = {
+            id: contactId
+        };
+        json scimResponse = {
+            "totalResults": 1,
+            "startIndex": 1,
+            "itemsPerPage": 1,
+            "schemas": [
+                "urn:ietf:params:scim:api:messages:2.0:ListResponse"
+            ],
+            "Resources": [userResource.toJson()]
+        };
+        http:Response response = new;
+        io:println("Updated the contact: " + contactId);
+        response.setJsonPayload(scimResponse.toJson());
+        response.statusCode = http:STATUS_OK;
+    }
+
 }
