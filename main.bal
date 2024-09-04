@@ -35,7 +35,7 @@ function checkAuth(string authHeader) returns error? {
 }
 
 service /scim2 on new http:Listener(9090) {
-    resource function post Users(@http:Payload scim:UserResource userResource, @http:Header string authorization) returns http:Created|error {
+    resource function post Users(@http:Payload scim:UserResource userResource, @http:Header string authorization, http:Caller caller) returns error? {
 
         error|null authError = check checkAuth(authorization);
         if (authError is error) {
@@ -63,7 +63,10 @@ service /scim2 on new http:Listener(9090) {
 
         if (bEvent is contact:SimplePublicObject) {
             io:println("Created the contact" + bEvent.toString());
-            return http:CREATED;
+            http:Response res = new;
+            res.setJsonPayload(userResource.toJson());
+            res.statusCode = 201;
+            _ = check caller->respond(res);
         } else {
             io:println(bEvent.message());
             return error(bEvent.message());
