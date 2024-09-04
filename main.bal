@@ -39,7 +39,10 @@ service /scim2 on new http:Listener(9090) {
 
         error|null authError = check checkAuth(authorization);
         if (authError is error) {
-            return authError;
+            http:Response response = new;
+            response.statusCode = http:STATUS_UNAUTHORIZED;
+            response.setJsonPayload({"message": authError.message()});
+            return check caller->respond(response);
         }
 
         string[] emails = userResource?.emails ?: [];
@@ -58,18 +61,18 @@ service /scim2 on new http:Listener(9090) {
             }
         };
         contact:Client baseClient = check new contact:Client(connectionConfig);
-
         contact:SimplePublicObject|error bEvent = baseClient->create(contact);
 
+        http:Response response = new;
         if (bEvent is contact:SimplePublicObject) {
             io:println("Created the contact" + bEvent.toString());
-            http:Response res = new;
-            res.setJsonPayload(userResource.toJson());
-            res.statusCode = 201;
-            _ = check caller->respond(res);
+            response.setJsonPayload(userResource.toJson());
+            response.statusCode = http:STATUS_CREATED;
         } else {
             io:println(bEvent.message());
-            return error(bEvent.message());
+            response.statusCode = http:STATUS_BAD_REQUEST;
+            response.setJsonPayload({"message": bEvent.message()});
         }
+        return check caller->respond(response);
     }
 }
