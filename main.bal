@@ -5,9 +5,9 @@ import ballerinax/scim;
 import ballerina/lang.array;
 import ballerina/regex;
 
-configurable string HUBSPOT_API_KEY = "HUBSPOT_API_KEY";
-configurable string USERNAME = "admin";
-configurable string PASSWORD = "admin";
+configurable string HUBSPOT_API_KEY = ?;
+configurable string USERNAME = ?;
+configurable string PASSWORD = ?;
 
 isolated function checkAuth(string authHeader) returns error? {
 
