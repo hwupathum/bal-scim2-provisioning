@@ -34,13 +34,19 @@ isolated function checkAuth(string authHeader) returns error? {
     }
 }
 
-isolated function getUsername(string[] filter) returns string? {
+isolated function getEmail(string[] filter) returns string? {
 
     if filter.length() > 0 && filter[0].startsWith("userName Eq ") {
         return filter[0].substring(12);
     } else {
         return null;
     }
+}
+
+isolated function getContactIdByEmail(contact:Client baseClient, string email) returns error|string {
+
+    contact:SimplePublicObjectWithAssociations userResponse = check baseClient->getObjectById(email, idProperty = "email");
+    return userResponse.id;
 }
 
 service /scim2 on new http:Listener(9090) {
@@ -61,27 +67,41 @@ service /scim2 on new http:Listener(9090) {
             }
         };
 
-        string[] emails = userResource?.emails ?: [];
-        contact:SimplePublicObjectInput contact = {
-            properties: {
-                "email": emails.pop(),
-                "firstname": userResource.name?.givenName,
-                "lastname": userResource.name?.familyName,
-                "lifecyclestage": "subscriber"
-            }
-        };
-        contact:Client baseClient = check new contact:Client(connectionConfig);
-        contact:SimplePublicObject|error bEvent = baseClient->create(contact);
+        string email = (userResource?.emails ?: []).pop();
 
+        contact:Client baseClient = check new contact:Client(connectionConfig);
         http:Response response = new;
-        if bEvent is contact:SimplePublicObject {
-            io:println("Created the contact: " + bEvent.id);
+        do {
+            if userResource.name != null {
+                string contactId = check getContactIdByEmail(baseClient, email);
+                contact:SimplePublicObjectInput contact = {
+                    properties: {
+                        "email": email,
+                        "firstname": "",
+                        "lastname": "",
+                        "lifecyclestage": "customer"
+                    }
+                };
+                _ = check baseClient->update(contactId, contact);
+                io:println("Updated the contact: " + contactId);
+            } else {
+                contact:SimplePublicObjectInput contact = {
+                    properties: {
+                        "email": email,
+                        "firstname": userResource.name?.givenName,
+                        "lastname": userResource.name?.familyName,
+                        "lifecyclestage": "subscriber"
+                    }
+                };
+                _ = check baseClient->create(contact);
+                io:println("Created the contact: " + email);
+            }
             response.setJsonPayload(userResource.toJson());
             response.statusCode = http:STATUS_CREATED;
-        } else {
-            io:println("Error creating the contact: " + bEvent.message());
+        } on fail var e {
+            io:println("Error updating/creating the contact: " + e.message());
             response.statusCode = http:STATUS_BAD_REQUEST;
-            response.setJsonPayload({"message": bEvent.message()});
+            response.setJsonPayload({"message": e.message()});
         }
         return check caller->respond(response);
     }
@@ -103,23 +123,22 @@ service /scim2 on new http:Listener(9090) {
             }
         };
 
-        string? userName = getUsername(filter);
-        if !(userName is string) {
+        string? email = getEmail(filter);
+        if !(email is string) {
             http:Response response = new;
             response.statusCode = http:STATUS_UNAUTHORIZED;
             response.setJsonPayload({"message": "Invalid filter query"});
             return check caller->respond(response);
         }
 
-        io:println("Get user: " + userName);
+        io:println("Get user: " + email);
 
         contact:Client baseClient = check new contact:Client(connectionConfig);
-        contact:SimplePublicObjectWithAssociations|error bEvent = check baseClient->getObjectById(userName, idProperty = "email");
-
         http:Response response = new;
-        if bEvent is contact:SimplePublicObject {
+        do {
+            string userId = check getContactIdByEmail(baseClient, email);
             scim:UserResource userResource = {
-                id: bEvent.id
+                id: userId
             };
             json scimResponse = {
                 "totalResults": 1,
@@ -130,13 +149,13 @@ service /scim2 on new http:Listener(9090) {
                 ],
                 "Resources": [userResource.toJson()]
             };
-            io:println("Got the contact: " + bEvent.id);
+            io:println("Got the contact: " + userId);
             response.setJsonPayload(scimResponse.toJson());
             response.statusCode = http:STATUS_OK;
-        } else {
-            io:println("Error creating the contact: " + bEvent.message());
+        } on fail var e {
+            io:println("Error creating the contact: " + e.message());
             response.statusCode = http:STATUS_BAD_REQUEST;
-            response.setJsonPayload({"message": bEvent.message()});
+            response.setJsonPayload({"message": e.message()});
         }
         return check caller->respond(response);
     }
