@@ -77,19 +77,24 @@ service /scim2 on new http:Listener(9090) {
                 contact:SimplePublicObjectInput contact = {
                     properties: {
                         "email": email,
-                        "firstname": "",
-                        "lastname": "",
+                        "firstname": userResource.name?.givenName,
+                        "lastname": userResource.name?.familyName,
                         "lifecyclestage": "customer"
                     }
                 };
-                _ = check baseClient->update(contactId, contact);
-                io:println("Updated the contact: " + contactId);
+                if contactId != "" {
+                    _ = check baseClient->update(contactId, contact);
+                    io:println("Updated the contact: " + contactId);
+                } else {
+                    _ = check baseClient->create(contact);
+                    io:println("Created the contact: " + email);
+                }
             } else {
                 contact:SimplePublicObjectInput contact = {
                     properties: {
                         "email": email,
-                        "firstname": userResource.name?.givenName,
-                        "lastname": userResource.name?.familyName,
+                        "firstname": "",
+                        "lastname": "",
                         "lifecyclestage": "subscriber"
                     }
                 };
