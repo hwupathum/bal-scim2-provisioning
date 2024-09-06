@@ -108,13 +108,11 @@ service /scim2 on new http:Listener(9090) {
                 _ = check baseClient->create(contact);
                 io:println("Created the contact: " + email);
             }
-            response.setJsonPayload(userResource.toJson());
-            response.statusCode = http:STATUS_CREATED;
         } on fail var e {
             io:println("Error updating/creating the contact: " + e.message());
-            response.statusCode = http:STATUS_BAD_REQUEST;
-            response.setJsonPayload({"message": e.message()});
         }
+        response.setJsonPayload(userResource.toJson());
+        response.statusCode = http:STATUS_CREATED;
         return check caller->respond(response);
     }
 
@@ -147,33 +145,35 @@ service /scim2 on new http:Listener(9090) {
 
         contact:Client baseClient = check new contact:Client(connectionConfig);
         http:Response response = new;
+        scim:UserResource userResource;
         do {
             string userId = check getContactIdByEmail(baseClient, email);
-            scim:UserResource userResource = {
+            userResource = {
                 id: userId
             };
-            json scimResponse = {
-                "totalResults": 1,
-                "startIndex": 1,
-                "itemsPerPage": 1,
-                "schemas": [
-                    "urn:ietf:params:scim:api:messages:2.0:ListResponse"
-                ],
-                "Resources": [userResource.toJson()]
-            };
             io:println("Got the contact: " + userId);
-            response.setJsonPayload(scimResponse.toJson());
-            response.statusCode = http:STATUS_OK;
         } on fail var e {
-            io:println("Error creating the contact: " + e.message());
-            response.statusCode = http:STATUS_BAD_REQUEST;
-            response.setJsonPayload({"message": e.message()});
+            userResource = {
+                id: "DUMMY_ID"
+            };
+            io:println("Error getting the contact: " + e.message());
         }
+        json scimResponse = {
+            "totalResults": 1,
+            "startIndex": 1,
+            "itemsPerPage": 1,
+            "schemas": [
+                "urn:ietf:params:scim:api:messages:2.0:ListResponse"
+            ],
+            "Resources": [userResource.toJson()]
+        };
+        response.setJsonPayload(scimResponse.toJson());
+        response.statusCode = http:STATUS_OK;
         return check caller->respond(response);
     }
 
 
-    resource function delete Users/[string contactId](http:Request request, @http:Header string authorization, http:Caller caller) returns error? {
+    resource function delete Users/[string contactId](@http:Header string authorization, http:Caller caller) returns error? {
         
         do {
 	        _ = check checkAuth(authorization);
@@ -197,7 +197,7 @@ service /scim2 on new http:Listener(9090) {
         return check caller->respond(response);
     }
 
-    resource function put Users/[string contactId](http:Request request, @http:Header string authorization, http:Caller caller) returns error? {
+    resource function put Users/[string contactId](@http:Header string authorization, http:Caller caller) returns error? {
 
         do {
 	        _ = check checkAuth(authorization);
