@@ -50,7 +50,7 @@ isolated function getContactIdByEmail(contact:Client baseClient, string email) r
 }
 
 service /scim2 on new http:Listener(9090) {
-    isolated resource function post Users(@http:Payload scim:UserResource userResource, @http:Header string authorization, http:Caller caller) returns error? {
+    isolated resource function post Users(@http:Payload UserResourcePayload userResource, @http:Header string authorization, http:Caller caller) returns error? {
 
         do {
 	        _ = check checkAuth(authorization);
@@ -67,7 +67,14 @@ service /scim2 on new http:Listener(9090) {
             }
         };
 
-        string email = (userResource?.emails ?: []).pop();
+        string[]|Email[]? emails = userResource.emails;
+
+        string email = "";
+        if emails is string[] {
+            email = emails.pop();
+        } else if emails is Email[] {
+            email = emails[0].value;
+        }
 
         contact:Client baseClient = check new contact:Client(connectionConfig);
         http:Response response = new;
@@ -222,3 +229,24 @@ service /scim2 on new http:Listener(9090) {
     }
 
 }
+
+public type UserResourcePayload record {
+    string[]|string schemas?;
+    string id?;
+    string externalId?;
+    string userName?;
+    scim:Name name?;
+    string displayName?;
+    string nickName?;
+    string profileUrl?;
+    string[]|Email[] emails?;
+    string locale?;
+    boolean active?;
+    scim:SCIMEnterpriseUser urn\:ietf\:params\:scim\:schemas\:extension\:enterprise\:2\.0\:User?;
+    json urn\:scim\:wso2\:schema?;
+};
+
+type Email record {
+    string primary;
+    string value;
+};
